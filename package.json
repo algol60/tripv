@@ -1,0 +1,22 @@
+{
+  "name": "deckgl-examples-map-tile",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "vite --open",
+    "start-local": "vite --config ../../vite.config.local.mjs",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "deck.gl": "^8.9.0",
+    "@turf/rhumb-bearing": "^6.5.0",
+    "@turf/rhumb-distance": "^6.5.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^4.6.0",
+    "vite": "^4.0.0"
+  }
+}

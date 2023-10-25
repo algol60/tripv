@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {createRoot} from 'react-dom/client';
 
 import DeckGL from '@deck.gl/react';
@@ -9,11 +9,10 @@ import {BitmapLayer, PathLayer} from '@deck.gl/layers';
 import TripBuilder from './trip-builder'
 // import { updateLanguageServiceSourceFile } from 'typescript';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
+import { Deck, FlyToInterpolator } from '@deck.gl/core';
 
-const DATA_URL = 'data/trips_recs2.json';
-// const BART_URL = 'data/bart-stations.json';
-// const MODEL_URL = 'data/truck.gltf';
-// const MODEL_URL = 'data/airplane.glb';
+// const DATA_URL = 'data/trips_recs2.json';
+const DATA_URL = 'data/trips_time.json';
 
 // Define the attributes of the layer for each model.
 // Different gltf modeld have different sizes, orientations, etc.
@@ -55,10 +54,13 @@ const ANIMATIONS = {
   '0': {speed: 5}
 };
 
+// Start at a generic high point; zoom in when we get the data
+// and figure out the bounding box.
+//
 const INITIAL_VIEW_STATE = {
-  latitude: 29.756433,
-  longitude: -95.36403,
-  zoom: 15,
+  latitude: 0,
+  longitude: 0,
+  zoom: 0,
   pitch: 45,
   maxZoom: 20,
   maxPitch: 89,
@@ -94,6 +96,7 @@ export function App() {
   const [pathData, setPathData] = useState(null); // Original data (mild munging).
   // const [tripData, setTripData] = useState(null); // Rebuilt trip data.
   const [frameData, setFrameData] = useState([]); // Just the data for the current timestamp.
+  const [viewState, setViewState] = useState(INITIAL_VIEW_STATE); // Bounding box.
   const tileOptions = {
     showBorder: false,
     onTilesLoad: null,
@@ -107,10 +110,28 @@ export function App() {
       .then(r => r.json())
       .then(r => {
         console.log(`FETCHED ${r.length} ${JSON.stringify(r)} / ${JSON.stringify(r[0])}`);
-        // r = r.map(d => ({...d, color:[255*Math.random(), 255*Math.random(), 255*Math.random()]}));
         console.log(`R ${JSON.stringify(r)}`);
         setPathData(r);
+
         const trips = r.map(waypoints => new TripBuilder({waypoints, loop: true}));
+
+        const minx = Math.min(...trips.map(trip => trip.minx));
+        const miny = Math.min(...trips.map(trip => trip.miny));
+        const maxx = Math.max(...trips.map(trip => trip.maxx));
+        const maxy = Math.max(...trips.map(trip => trip.maxy));
+        setViewState({
+            longitude: (minx+maxx)/2,
+            latitude: (miny+maxy)/2,
+            zoom: 8,
+            pitch: 45,
+            maxZoom: 20,
+            maxPitch: 89,
+            bearing: 0,
+            transitionDuration: 2000,
+            transitionInterpolator: new FlyToInterpolator()
+        });
+        console.log(`BBOX ${minx},${miny} ${maxx},${maxy}`);
+
         // setTripData(trips);
         startAnimation(trips);//(r);
         console.log('@@ START');
@@ -122,50 +143,14 @@ export function App() {
     new PathLayer({
       id: 'path-lines',
       data: pathData,
-      getPath: d => {const d2 = d.coords.map(c => [c[0],c[1],c[2]+3.5]); d2.push(d2[0]); return d2;}, // Join the ends; Lift above the map by width/2
+      getPath: d => {const d2 = d.coords.map(c => [c[0],c[1],c[2]+0.25]); d2.push(d2[0]); return d2;}, // Join the ends; Lift above the map (by width/2 ?  or something else?).
       pickable: false,
       getColor: d => d.color,
       billboard: true,
       jointRounded: true,
       opacity: 1.0,
-      getWidth: 7
+      getWidth: 270
     });
-
-  // const tripLayer = //frameData &&
-  //   new ScenegraphLayer({
-  //     id: 'airplane-layer',
-  //     // data: frameData,
-  //     data: frameData.filter(e => e.model=='airplane'),
-  //     pickable: true,
-  //     scenegraph: MODELS.get('airplane').url,
-  //     _animations: ANIMATIONS,
-  //     sizeMinPixels: 1,
-  //     sizeMaxPixels: 5,
-  //     getPosition: d => d.point,
-  //     getTranslation: d => [0, 0, 5], // Lift above map
-  //     getOrientation: MODELS.get('airplane').orientation, //d => [0, -d.heading, 90+d.pitch],
-  //     // getColor: d => d.color,
-  //     sizeScale: 1,
-  //     _lighting: 'pbr'
-  //   });
-
-  //   const truckLayer = //frameData &&
-  //   new ScenegraphLayer({
-  //     id: 'truck-layer',
-  //     // data: frameData,
-  //     data: frameData.filter(e => e.model=='truck'),
-  //     pickable: true,
-  //     scenegraph: MODELS.get('truck').url,
-  //     _animations: ANIMATIONS,
-  //     sizeMinPixels: 10,
-  //     sizeMaxPixels: 50,
-  //     getPosition: d => d.point,
-  //     getTranslation: d => [0, 0, 5], // Lift above map
-  //     getOrientation: MODELS.get('truck').orientation, //d => [0, 180-d.heading, 90+d.pitch],
-  //     // getColor: d => d.color,
-  //     sizeScale: 1,
-  //     _lighting: 'pbr'
-  //   });
 
     const models = [...new Set(frameData.map(e => e.model))];
 
@@ -180,9 +165,9 @@ export function App() {
       getPosition: d => d.point,
       getTranslation: d => [0, 0, 5], // Lift above map
       getOrientation: MODELS.get(model).orientation, //d => [0, 180-d.heading, 90+d.pitch],
-      // getColor: d => d.color,
       sizeScale: 1,
-      _lighting: 'pbr'
+      // getColor: d => d.color,
+      _lighting: 'pbr' // 'flat' | 'pbr'
     }));
 
     const tileLayer = new TileLayer({
@@ -240,9 +225,9 @@ export function App() {
   });
 
   const startAnimation = (tripData) => {
-    // const trips = tripData.map(waypoints => new TripBuilder({waypoints, loop:true})); // dup: see above.
     const trips = tripData;
     console.log(`@@ TRIPS ${JSON.stringify(trips)}`);
+
     let timestamp = 0;
 
     let frameNum = 0;
@@ -281,10 +266,10 @@ export function App() {
 
   return (
     <DeckGL
-      // layers={[tripLayer, truckLayer, pathLayer, tileLayer]}
       layers={layers.concat(pathLayer, tileLayer)}
       views={new MapView({repeat: true})}
-      initialViewState={INITIAL_VIEW_STATE}
+      viewState={viewState}
+      onViewStateChange={e => setViewState(e.viewState)}
       controller={true}
       getTooltip={getTooltip}
     >

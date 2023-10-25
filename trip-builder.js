@@ -18,6 +18,11 @@ export default class TripBuilder {
     this.loop = loop;
     this.totalTime = 0;
 
+    this.minx = Math.min(...waypoints.coords.map(c => c[0]));
+    this.miny = Math.min(...waypoints.coords.map(c => c[1]));
+    this.maxx = Math.max(...waypoints.coords.map(c => c[0]));
+    this.maxy = Math.max(...waypoints.coords.map(c => c[1]));
+
     for (const p of waypoints.coords) {
       this._moveTo(p);
     }
